@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3D Network Simulator - Level 5 (IP Routing & OSPF)</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #0a1128; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; user-select: none; }
+        #canvas-container { width: 100vw; height: 100vh; }
+        .threeui-hud { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 20px; box-sizing: border-box; }
+        .ui-panel { background: rgba(10, 25, 47, 0.92); border: 2px solid #00f0ff; box-shadow: 0 0 20px rgba(0, 240, 255, 0.4); backdrop-filter: blur(10px); border-radius: 8px; padding: 15px 20px; color: #ffffff; pointer-events: auto; }
+        .header-panel h1 { margin: 0 0 5px 0; font-size: 18px; color: #00f0ff; text-transform: uppercase; }
+        .header-panel p { margin: 0; font-size: 13px; color: #d0e8ff; }
+        
+        .control-panel { position: absolute; right: 20px; top: 20px; width: 350px; }
+        .legend-panel { position: absolute; left: 20px; bottom: 20px; width: 380px; }
+
+        .btn { background: linear-gradient(45deg, #0066ff, #00f0ff); border: none; color: white; padding: 10px; margin: 5px 0; width: 100%; border-radius: 4px; font-weight: bold; font-size: 13px; cursor: pointer; box-shadow: 0 0 10px rgba(0, 240, 255, 0.4); }
+        .btn-ospf { background: linear-gradient(45deg, #00b4d8, #0077b6); }
+        .btn-failover { background: linear-gradient(45deg, #ff0055, #ffaa00); }
+        .btn-extra { background: linear-gradient(45deg, #a000ff, #00f0ff); }
+        .btn:hover { box-shadow: 0 0 20px rgba(0, 240, 255, 0.9); transform: translateY(-1px); }
+        
+        .level-select { width: 100%; padding: 8px; margin-bottom: 10px; background: #1c2d5a; color: #ffaa00; border: 1px solid #ffaa00; border-radius: 4px; font-weight: bold; }
+        .node-label { position: absolute; color: #ffffff; font-weight: bold; font-size: 12px; padding: 4px 8px; background: rgba(0, 15, 35, 0.85); border-radius: 4px; border: 1px solid #00f0ff; pointer-events: none; white-space: nowrap; transform: translate(-50%, -100%); box-shadow: 0 0 10px rgba(0,240,255,0.4); }
+
+        .modal-overlay { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(5, 10, 25, 0.88); backdrop-filter: blur(8px); display: none; justify-content: center; align-items: center; z-index: 100; pointer-events: auto; }
+        .modal-content { background: #0f1e3c; border: 2px solid #00f0ff; box-shadow: 0 0 30px rgba(0, 240, 255, 0.5); border-radius: 12px; width: 85%; max-width: 800px; max-height: 85vh; overflow-y: auto; padding: 25px; color: #ffffff; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #00f0ff; padding-bottom: 10px; }
+        .modal-header h2 { margin: 0; color: #00f0ff; font-size: 20px; }
+        .close-btn { background: none; border: none; color: #ff0055; font-size: 24px; font-weight: bold; cursor: pointer; }
+
+        @media (max-width: 768px) {
+            .threeui-hud { padding: 8px !important; }
+            .ui-panel { width: 100% !important; padding: 8px 12px !important; }
+            .control-panel { position: absolute !important; top: 8px !important; right: 8px !important; left: 8px !important; width: auto !important; }
+            .legend-panel { position: absolute !important; bottom: 8px !important; left: 8px !important; right: 8px !important; width: auto !important; }
+            .btn { padding: 6px 8px !important; font-size: 11px !important; }
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+    <div id="canvas-container"></div>
+
+    <div id="label-pc1" class="node-label" style="border-color: #ffaa00;">💻 Sales PC (192.168.1.10/24)</div>
+    <div id="label-r1" class="node-label" style="border-color: #00f0ff;">🌐 Router A (Gateway)</div>
+    <div id="label-r2" class="node-label" style="border-color: #00f0ff;">🌐 Router B (Main Path)</div>
+    <div id="label-r3" class="node-label" style="border-color: #a000ff;">🌐 Router C (Backup Path)</div>
+    <div id="label-pc2" class="node-label" style="border-color: #00ff66;">🖥️ Server (10.0.0.100/8)</div>
+
+    <div class="threeui-hud">
+        <div class="ui-panel header-panel" style="width: 340px;">
+            <h1>🟡 Level 5: IP 路由選擇與 OSPF (CCNA)</h1>
+            <p>理解 Layer 3 跨網段路由、子網遮罩與最短路徑計算</p>
+        </div>
+
+        <div class="ui-panel legend-panel">
+            <h4 style="margin: 0 0 8px 0; color: #ffaa00;">💡 承前啟後：為什麼需要 Router？</h4>
+            <p style="font-size: 11px; margin: 0; color: #d0e8ff;">Level 4 中 VLAN 阻斷了跨部門廣播。當不同網段（IP）要互相傳遞資料時，必須靠 Layer 3 路由器（Router）進行「跨網段導航」，並由 OSPF 動態計算出最佳路徑。</p>
+        </div>
+
+        <div class="ui-panel control-panel">
+            <label style="font-size: 12px; color: #a0c0d0;">選擇難度等級 (Switch Level):</label>
+            <select class="level-select" onchange="location = this.value;">
+                <option value="network_level1.html">Level 1: 基礎傳輸 (Basic)</option>
+                <option value="network_level2.html">Level 2: TCP 握手與防火牆 (Medium)</option>
+                <option value="network_level3.html">Level 3: DDoS 與負載平衡 (Hard)</option>
+                <option value="network_level4.html">Level 4: VLANs & 廣播風暴 (CCNA)</option>
+                <option value="network_level5.html" selected>Level 5: 路由器與 IP 網段 (CCNA)</option>
+                <option value="network_level6.html">Level 6: 企業級 SD-WAN (CCNP)</option>
+            </select>
+            
+            <button class="btn btn-extra" onclick="toggleModal(true)">🎓 零基礎到 CCNA：IP 路由與 OSPF 拆解</button>
+            <button class="btn btn-ospf" id="btn-route">🚀 傳送跨網段 IP 封包 (Router A -> Server)</button>
+            <button class="btn btn-failover" id="btn-fail">⚠️ 類比主要路徑中斷 (OSPF 動態切換)</button>
+        </div>
+    </div>
+
+    <div id="extra-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📖 資深工程師講堂：Level 5 核心 IP 路由觀念</h2>
+                <button class="close-btn" onclick="toggleModal(false)">✕</button>
+            </div>
+            <div style="font-size: 13px; line-height: 1.7; color: #e0f0ff; margin-top: 15px;">
+                <h3 style="color: #00f0ff; margin-bottom: 5px;">1. 前情提要：VLAN 隔離後，如何跨部門通訊？</h3>
+                <p>Level 4 用 VLAN 隔離了廣播。但 Sales 部門（`192.168.1.0/24`）如果要向 Data Center（`10.0.0.0/8`）發送請求，Switch（L2）無能為力。這時必須靠 **Router（L3 路由器）** 檢查目的地 IP，決定下一步該往哪裡轉發。</p>
+
+                <h3 style="color: #00f0ff; margin-bottom: 5px;">2. 子網切分 (Subnetting) 與預設閘道 (Default Gateway)</h3>
+                <p>• <b>Default Gateway：</b> 電腦發送封包時，若發現目標 IP 不在同一個子網內，就會自動把封包交給網段出口（閘道路由器）。<br>
+                • <b>Subnetting (/24, /26)：</b> 精準切割 IP 範圍，避免地址浪費。路由器根據「最長匹配原則 (Longest Prefix Match)」選擇最佳路由目標。</p>
+
+                <h3 style="color: #00f0ff; margin-bottom: 5px;">3. 動態路由協定：OSPF 最短路徑優先</h3>
+                <p>大型企業有幾十台 Router，手動設定靜態路由太慢且無法應對斷線。<b>OSPF (Open Shortest Path First)</b> 使用 Dijkstra 演算法計算頻寬代價（Cost），當主路徑（Router B）斷線時，OSPF 能在秒級內**自動切換至備用路徑（Router C）**！</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleModal(show) { document.getElementById('extra-modal').style.display = show ? 'flex' : 'none'; }
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 22, 35);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+
+        const grid = new THREE.GridHelper(60, 60, 0x00f0ff, 0x112244);
+        grid.position.y = -2; scene.add(grid);
+
+        function createNode(x, z, color, isCylinder = false) {
+            const group = new THREE.Group(); group.position.set(x, 0, z);
+            const geo = isCylinder ? new THREE.CylinderGeometry(2, 2, 1.5, 16) : new THREE.BoxGeometry(2, 2, 2);
+            const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.3 }));
+            group.add(mesh); scene.add(group);
+            return { group, position: new THREE.Vector3(x, 0, z) };
+        }
+
+        const pc1 = createNode(-20, 0, 0xffaa00);
+        const r1 = createNode(-10, 0, 0x00f0ff, true);
+        const r2 = createNode(0, -8, 0x00f0ff, true);  // 主路徑
+        const r3 = createNode(0, 8, 0xa000ff, true);   // 備用路徑
+        const pc2 = createNode(18, 0, 0x00ff66);
+
+        let mainLinkColor = 0x00f0ff;
+        let lineR1R2, lineR2PC2;
+
+        function drawLines() {
+            function makeLine(p1, p2, color) {
+                const geo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+                const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color, linewidth: 2 }));
+                scene.add(line);
+                return line;
+            }
+            makeLine(pc1.position, r1.position, 0xffaa00);
+            lineR1R2 = makeLine(r1.position, r2.position, mainLinkColor);
+            makeLine(r1.position, r3.position, 0xa000ff);
+            lineR2PC2 = makeLine(r2.position, pc2.position, mainLinkColor);
+            makeLine(r3.position, pc2.position, 0xa000ff);
+        }
+        drawLines();
+
+        function updateLabels() {
+            function project(pos, elemId) {
+                const tempV = pos.clone(); tempV.y += 2.2; tempV.project(camera);
+                const x = (tempV.x * .5 + .5) * window.innerWidth;
+                const y = (tempV.y * -.5 + .5) * window.innerHeight;
+                const elem = document.getElementById(elemId);
+                if(elem) { elem.style.left = `${x}px`; elem.style.top = `${y}px`; }
+            }
+            project(pc1.position, 'label-pc1'); 
+            project(r1.position, 'label-r1');
+            project(r2.position, 'label-r2'); 
+            project(r3.position, 'label-r3');
+            project(pc2.position, 'label-pc2');
+        }
+
+        const packets = [];
+        let isMainPathFailed = false;
+
+        document.getElementById('btn-route').addEventListener('click', () => {
+            // PC1 -> R1
+            spawnPacket(pc1.position, r1.position, 0xffaa00, () => {
+                if(!isMainPathFailed) {
+                    // 走主路徑 R2
+                    spawnPacket(r1.position, r2.position, 0x00f0ff, () => {
+                        spawnPacket(r2.position, pc2.position, 0x00f0ff);
+                    });
+                } else {
+                    // OSPF 自動容錯切換走 R3
+                    spawnPacket(r1.position, r3.position, 0xa000ff, () => {
+                        spawnPacket(r3.position, pc2.position, 0xa000ff);
+                    });
+                }
+            });
+        });
+
+        document.getElementById('btn-fail').addEventListener('click', () => {
+            isMainPathFailed = !isMainPathFailed;
+            const btn = document.getElementById('btn-fail');
+            btn.innerText = isMainPathFailed ? "🟢 恢復 Router B 主路徑" : "⚠️ 類比主要路徑中斷 (OSPF 動態切換)";
+        });
+
+        function spawnPacket(from, to, color, onComplete) {
+            const p = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 12), new THREE.MeshBasicMaterial({ color }));
+            p.position.copy(from);
+            p.userData = { start: from.clone(), target: to.clone(), progress: 0, speed: 0.025, onComplete };
+            scene.add(p); packets.push(p);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update(); updateLabels();
+
+            for (let i = packets.length - 1; i >= 0; i--) {
+                const p = packets[i];
+                p.userData.progress += p.userData.speed;
+                p.position.lerpVectors(p.userData.start, p.userData.target, p.userData.progress);
+                if (p.userData.progress >= 1) { 
+                    if(p.userData.onComplete) p.userData.onComplete();
+                    scene.remove(p); packets.splice(i, 1); 
+                }
+            }
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+</html>

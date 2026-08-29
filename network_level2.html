@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3D Network Simulator - Level 2 (OSI vs TCP/IP Interactive)</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background-color: #0b132b; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            user-select: none; 
+        }
+        #canvas-container { width: 100vw; height: 100vh; }
+        .threeui-hud { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            pointer-events: none; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: space-between; 
+            padding: 20px; 
+            box-sizing: border-box; 
+        }
+        .ui-panel { 
+            background: rgba(15, 30, 60, 0.92); 
+            border: 2px solid #ffaa00; 
+            box-shadow: 0 0 20px rgba(255, 170, 0, 0.4); 
+            backdrop-filter: blur(10px); 
+            border-radius: 8px; 
+            padding: 15px 20px; 
+            color: #ffffff; 
+            pointer-events: auto; 
+        }
+        .header-panel h1 { margin: 0 0 5px 0; font-size: 18px; color: #ffaa00; text-transform: uppercase; }
+        .header-panel p { margin: 0; font-size: 13px; color: #d0e8ff; }
+        
+        .control-panel { position: absolute; right: 20px; top: 20px; width: 340px; }
+        .legend-panel { position: absolute; left: 20px; bottom: 20px; width: 380px; }
+
+        .btn { 
+            background: linear-gradient(45deg, #0066ff, #00f0ff); 
+            border: none; 
+            color: white; 
+            padding: 10px; 
+            margin: 5px 0; 
+            width: 100%; 
+            border-radius: 4px; 
+            font-weight: bold; 
+            font-size: 13px;
+            cursor: pointer; 
+            box-shadow: 0 0 10px rgba(0, 240, 255, 0.4);
+        }
+        .btn-model { background: linear-gradient(45deg, #a000ff, #00f0ff); }
+        .btn-fw { background: linear-gradient(45deg, #ff0055, #ffaa00); }
+        .btn:hover { box-shadow: 0 0 20px rgba(0, 240, 255, 0.9); transform: translateY(-1px); }
+        .level-select { 
+            width: 100%; 
+            padding: 8px; 
+            margin-bottom: 10px; 
+            background: #1c2d5a; 
+            color: #ffaa00; 
+            border: 1px solid #ffaa00; 
+            border-radius: 4px; 
+            font-weight: bold; 
+        }
+        .info-card { 
+            font-size: 12px; 
+            line-height: 1.6; 
+            margin-top: 10px; 
+            border-top: 1px solid rgba(255, 170, 0, 0.3); 
+            padding-top: 8px; 
+        }
+        
+        /* 3D 浮動標籤 */
+        .node-label {
+            position: absolute;
+            color: #ffffff;
+            font-weight: bold;
+            font-size: 12px;
+            padding: 4px 8px;
+            background: rgba(0, 15, 35, 0.85);
+            border-radius: 4px;
+            border: 1px solid #00f0ff;
+            pointer-events: none;
+            white-space: nowrap;
+            transform: translate(-50%, -100%);
+            box-shadow: 0 0 10px rgba(0,240,255,0.4);
+        }
+
+        /* 網絡模型 Modal 對話視窗 */
+        .modal-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(5, 10, 25, 0.85);
+            backdrop-filter: blur(8px);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            pointer-events: auto;
+        }
+        .modal-content {
+            background: #0f1e3c;
+            border: 2px solid #00f0ff;
+            box-shadow: 0 0 30px rgba(0, 240, 255, 0.5);
+            border-radius: 12px;
+            width: 85%;
+            max-width: 800px;
+            max-height: 85vh;
+            overflow-y: auto;
+            padding: 25px;
+            color: #ffffff;
+        }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #00f0ff; padding-bottom: 10px; }
+        .modal-header h2 { margin: 0; color: #00f0ff; font-size: 20px; }
+        .close-btn { background: none; border: none; color: #ff0055; font-size: 24px; font-weight: bold; cursor: pointer; }
+        
+        .model-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
+        .model-table th, .model-table td { border: 1px solid #224477; padding: 10px; text-align: left; }
+        .model-table th { background: #182e5c; color: #ffaa00; }
+        
+        .quiz-option { 
+            display: block; width: 100%; text-align: left; padding: 8px 12px; margin: 5px 0; 
+            background: #182e5c; border: 1px solid #00f0ff; color: white; border-radius: 4px; cursor: pointer; 
+        }
+        .quiz-option:hover { background: #0066ff; }
+        @media (max-width: 768px) {
+            /* 1. 縮減全域 Padding 與邊距 */
+            .threeui-hud {
+                padding: 8px !important;
+            }
+
+            /* 2. 讓所有 UI 面板自動適應寬度，並大幅縮小內距 */
+            .ui-panel {
+                width: 100% !important;
+                max-width: 100% !important;
+                padding: 8px 12px !important;
+                box-sizing: border-box !important;
+                border-width: 1px !important;
+            }
+
+            /* 3. 重設定位：將控制面板移至頂部，圖例移至底部 */
+            .header-panel {
+                position: relative !important;
+                width: 100% !important;
+                margin-bottom: 6px !important;
+            }
+            
+            .control-panel {
+                position: absolute !important;
+                top: 8px !important;
+                right: 8px !important;
+                left: 8px !important;
+                width: auto !important;
+            }
+
+            .legend-panel {
+                position: absolute !important;
+                bottom: 8px !important;
+                left: 8px !important;
+                right: 8px !important;
+                width: auto !important;
+                max-height: 120px !important; /* 限制高度，避免擋住 3D */
+                overflow-y: auto !important;   /* 文字過長時允許內部滑動 */
+            }
+
+            /* 4. 等比例縮小字體與按鈕，節省空間 */
+            .header-panel h1 { font-size: 14px !important; margin-bottom: 2px !important; }
+            .header-panel p { font-size: 11px !important; }
+            
+            .btn {
+                padding: 6px 8px !important;
+                font-size: 11px !important;
+                margin: 3px 0 !important;
+            }
+
+            .level-select {
+                padding: 4px !important;
+                font-size: 11px !important;
+                margin-bottom: 4px !important;
+            }
+
+            .info-card {
+                font-size: 10px !important;
+                margin-top: 5px !important;
+                padding-top: 5px !important;
+            }
+
+            /* 5. 縮小 3D 浮動文字標籤 (Node Labels) */
+            .node-label {
+                font-size: 10px !important;
+                padding: 2px 5px !important;
+            }
+
+            /* 6. 彈出對話視窗 (Modal) 自動縮小 */
+            .modal-content {
+                width: 90% !important;
+                padding: 12px !important;
+                max-height: 80vh !important;
+            }
+
+            .model-table {
+                font-size: 10px !important;
+            }
+            
+            .model-table th, .model-table td {
+                padding: 4px 6px !important;
+            }
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+    <div id="canvas-container"></div>
+
+    <!-- HTML 3D Floating Labels -->
+    <div id="label-client" class="node-label" style="border-color: #00f0ff;">💻 客戶端 (Client)</div>
+    <div id="label-fw" class="node-label" style="border-color: #ff0055;">🛡️ 防火牆 (Firewall)</div>
+    <div id="label-server" class="node-label" style="border-color: #00ff88;">🖥️ 伺服器 (Server)</div>
+
+    <div class="threeui-hud">
+        <div class="ui-panel header-panel" style="width: 320px;">
+            <h1>🟡 Level 2: TCP 原理與三次握手</h1>
+            <p>理解 Transmission Control Protocol 與防火牆過濾</p>
+        </div>
+
+        <!-- 左下圖例 -->
+        <div class="ui-panel legend-panel">
+            <h4 style="margin: 0 0 8px 0; color: #ffaa00;">💡 什麼是 TCP？為什麼要三次握手？</h4>
+            <div style="font-size: 11px; line-height: 1.5; color: #e0f0ff;">
+                <p style="margin: 3px 0;"><strong style="color: #00f0ff;">TCP 命名：</strong> Transmission Control Protocol（傳輸控制協議），確保資料「不遺失、依序到達」。</p>
+                <p style="margin: 3px 0;"><strong style="color: #ffaa00;">三次握手目的：</strong> 確認雙方的<b>發送</b>與<b>接收</b>能力正常（1.SYN → 2.SYN-ACK → 3.ACK）。</p>
+            </div>
+        </div>
+
+        <div class="ui-panel control-panel">
+            <label style="font-size: 12px; color: #a0c0d0;">選擇難度等級 (Switch Level):</label>
+            <select class="level-select" onchange="location = this.value;">
+                <option value="network_level1.html">Level 1: 基礎傳輸 (Basic)</option>
+                <option value="network_level2.html" selected>Level 2: TCP 握手與防火牆 (Medium)</option>
+                <option value="network_level3.html">Level 3: DDoS 與負載平衡 (Hard)</option>
+                <option value="network_level4.html">Level 4: VLANs & 廣播風暴 (CCNA)</option>
+                <option value="network_level5.html">Level 5: 路由器與 IP 網段 (CCNA)</option>
+                <option value="network_level6.html">Level 6: 企業級 SD-WAN (CCNP)</option>
+            </select>
+            
+            <button class="btn btn-model" onclick="toggleModal(true)">📦 網絡模型解析 (OSI vs TCP/IP)</button>
+            <button class="btn" id="btn-handshake">🤝 執行 TCP 三次握手</button>
+            <button class="btn btn-fw" id="btn-fw">🛡️ 防火牆狀態: [ALLOW 通行]</button>
+            
+            <div class="info-card">
+                <div><strong>TCP 連線狀態：</strong> <span id="tcp-status" style="color:#ff5555; font-weight: bold;">CLOSED (未建立)</span></div>
+                <div style="margin-top: 6px; font-weight: bold; color: #ffaa00;">握手進度解析：</div>
+                <div id="packet-info" style="color: #00f0ff; font-family: monospace; background: rgba(0,0,0,0.4); padding: 8px; border-radius: 4px; margin-top: 4px;">
+                    點擊按鈕啟動握手。
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 彈出式 Modal：網絡模型解說與互動測驗 -->
+    <div id="model-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📦 用「寄快遞」輕鬆理解 OSI 與 TCP/IP 模型</h2>
+                <button class="close-btn" onclick="toggleModal(false)">✕</button>
+            </div>
+
+            <p style="font-size: 13px; color: #a0c0d0; line-height: 1.6;">
+                <b>為什麼需要模型？</b> 因為網絡傳輸非常複雜。把網路比作<b>寄一份國際快遞</b>：<br>
+                • <b>OSI (7層)</b> 是理論上的<b>完全分工手冊</b>。<br>
+                • <b>TCP/IP (4層)</b> 是現實世界簡化後的<b>實用快遞流程</b>。
+            </p>
+
+            <table class="model-table">
+                <thead>
+                    <tr>
+                        <th>OSI 7層 (理論版)</th>
+                        <th>📦 寄快遞生活比喻</th>
+                        <th>TCP/IP 4層 (實用版)</th>
+                        <th>實際網路運作元件</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><b>7. Application (應用層)</b></td>
+                        <td>寫信內容（要寄什麼文字/圖片）</td>
+                        <td rowspan="3" style="background: rgba(0,240,255,0.1); vertical-align: middle;"><b>1. Application (應用層)</b></td>
+                        <td>HTTP, LINE, Chrome 瀏覽器</td>
+                    </tr>
+                    <tr>
+                        <td><b>6. Presentation (表示層)</b></td>
+                        <td>翻譯語言、加密內容</td>
+                        <td>SSL/TLS 加密, JPEG, JSON</td>
+                    </tr>
+                    <tr>
+                        <td><b>5. Session (會話層)</b></td>
+                        <td>通話確認對方有空（保持對話）</td>
+                        <td>連線狀態維持/斷線重連</td>
+                    </tr>
+                    <tr>
+                        <td><b>4. Transport (傳輸層)</b></td>
+                        <td>選擇快遞公司（要簽收的順豐或平郵）</td>
+                        <td style="background: rgba(255,170,0,0.1);"><b>2. Transport (傳輸層)</b></td>
+                        <td><b>TCP</b> (保證送達) / <b>UDP</b> (快速發送)</td>
+                    </tr>
+                    <tr>
+                        <td><b>3. Network (網絡層)</b></td>
+                        <td>填寫城市與地址、規劃公路導航路線</td>
+                        <td style="background: rgba(0,255,136,0.1);"><b>3. Internet (網際網絡層)</b></td>
+                        <td><b>IP 地址</b>、路由器 (Router)</td>
+                    </tr>
+                    <tr>
+                        <td><b>2. Data Link (數據鏈路層)</b></td>
+                        <td>門牌號碼（最後一公里精準配送）</td>
+                        <td rowspan="2" style="background: rgba(255,0,85,0.1); vertical-align: middle;"><b>4. Network Access (網絡存取層)</b></td>
+                        <td><b>MAC 地址</b>、交換機 (Switch)</td>
+                    </tr>
+                    <tr>
+                        <td><b>1. Physical (物理層)</b></td>
+                        <td>實體卡車、飛機、馬路道路</td>
+                        <td>光纖、網線、Wi-Fi 電磁波</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- 快驗遊戲 -->
+            <div style="margin-top: 20px; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px;">
+                <h3 style="margin: 0 0 10px 0; color: #ffaa00; font-size: 15px;">🎮 快速情境考考你：</h3>
+                <p style="font-size: 13px; margin: 5px 0 10px 0;"><b>問題：</b>「快遞小哥正根據<b> IP 地址</b> 幫包裹尋找最快的高速公路路線」，這屬於哪一層？</p>
+                <button class="quiz-option" onclick="checkQuiz(false)">A. Application 應用層（寫信內容）</button>
+                <button class="quiz-option" onclick="checkQuiz(true)">B. Network / Internet 網絡層（尋路與地址）</button>
+                <button class="quiz-option" onclick="checkQuiz(false)">C. Physical 物理層（柏油馬路）</button>
+                <div id="quiz-result" style="margin-top: 10px; font-weight: bold; font-size: 13px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Modal 顯隱控制
+        function toggleModal(show) {
+            document.getElementById('model-modal').style.display = show ? 'flex' : 'none';
+        }
+
+        function checkQuiz(isCorrect) {
+            const res = document.getElementById('quiz-result');
+            if(isCorrect) {
+                res.innerHTML = "<span style='color:#00ff88;'>🎉 答對了！IP 地址和路由器導航路線就是 Network (網絡層) 的工作！</span>";
+            } else {
+                res.innerHTML = "<span style='color:#ff0055;'>❌ 再試一次！提示：地址導航與路線選擇屬於『網絡層』。</span>";
+            }
+        }
+
+        // Three.js 場景設置
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x0b132b, 0.015);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 16, 30);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+        scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        dirLight.position.set(10, 30, 20);
+        scene.add(dirLight);
+
+        const grid = new THREE.GridHelper(60, 60, 0xffaa00, 0x224488);
+        grid.position.y = -2;
+        scene.add(grid);
+
+        // 節點建立
+        function createNode(x, z, color) {
+            const group = new THREE.Group(); group.position.set(x, 0, z);
+            const mesh = new THREE.Mesh(
+                new THREE.BoxGeometry(2.5, 2.5, 2.5), 
+                new THREE.MeshStandardMaterial({ color, metalness: 0.3, emissive: color, emissiveIntensity: 0.3 })
+            );
+            group.add(mesh); scene.add(group);
+            return { group, position: new THREE.Vector3(x, 0, z) };
+        }
+
+        const client = createNode(-14, 0, 0x00f0ff);
+        const server = createNode(14, 0, 0x00ff88);
+
+        const fwMesh = new THREE.Mesh(
+            new THREE.BoxGeometry(1.2, 6, 8), 
+            new THREE.MeshStandardMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.6, emissive: 0x00f0ff, emissiveIntensity: 0.4 })
+        );
+        fwMesh.position.set(0, 1, 0); 
+        scene.add(fwMesh);
+
+        const pipeGeo = new THREE.BufferGeometry().setFromPoints([client.position, server.position]);
+        scene.add(new THREE.Line(pipeGeo, new THREE.LineBasicMaterial({ color: 0xffaa00 })));
+
+        const packet = new THREE.Mesh(new THREE.SphereGeometry(0.6, 16, 16), new THREE.MeshBasicMaterial({ color: 0xffff00 }));
+        packet.visible = false; scene.add(packet);
+
+        // 標籤位置更新
+        function updateLabels() {
+            function project(pos, elemId, offsetY = 2.2) {
+                const tempV = pos.clone(); tempV.y += offsetY; tempV.project(camera);
+                const x = (tempV.x * .5 + .5) * window.innerWidth;
+                const y = (tempV.y * -.5 + .5) * window.innerHeight;
+                const elem = document.getElementById(elemId);
+                elem.style.left = `${x}px`; elem.style.top = `${y}px`;
+            }
+            project(client.position, 'label-client');
+            project(fwMesh.position, 'label-fw', 3.8);
+            project(server.position, 'label-server');
+        }
+
+        let fwAllow = true, isAnimating = false;
+
+        function animatePacket(from, to, callback) {
+            let start = null; packet.position.copy(from); packet.visible = true;
+            function step(t) {
+                if (!start) start = t;
+                let progress = (t - start) / 1200;
+                if (!fwAllow && packet.position.x >= -0.5 && from.x < 0) {
+                    packet.visible = false;
+                    if (callback) callback(true);
+                    return;
+                }
+                if (progress < 1) { 
+                    packet.position.lerpVectors(from, to, progress); 
+                    requestAnimationFrame(step); 
+                } else { 
+                    packet.position.copy(to); 
+                    if (callback) callback(false); 
+                }
+            }
+            requestAnimationFrame(step);
+        }
+
+        document.getElementById('btn-fw').addEventListener('click', (e) => {
+            fwAllow = !fwAllow;
+            if(fwAllow) {
+                e.target.innerText = "🛡️ 防火牆狀態: [ALLOW 通行]";
+                e.target.style.background = "linear-gradient(45deg, #0066ff, #00f0ff)";
+                fwMesh.material.color.setHex(0x00f0ff);
+            } else {
+                e.target.innerText = "🛑 防火牆狀態: [BLOCK 攔截]";
+                e.target.style.background = "linear-gradient(45deg, #ff0055, #ffaa00)";
+                fwMesh.material.color.setHex(0xff0055);
+            }
+        });
+
+        document.getElementById('btn-handshake').addEventListener('click', () => {
+            if (isAnimating) return; isAnimating = true;
+            const info = document.getElementById('packet-info');
+            info.innerHTML = "🤝 <b>[1/3 SYN]</b> 發送連線請求...";
+
+            animatePacket(client.position, server.position, (blocked) => {
+                if (blocked) {
+                    info.innerHTML = "🚨 <b>SYN 被防火牆檔下！</b>連線失敗。";
+                    isAnimating = false; return;
+                }
+                info.innerHTML = "🤝 <b>[2/3 SYN-ACK]</b> 伺服器同意回應...";
+                animatePacket(server.position, client.position, () => {
+                    info.innerHTML = "🤝 <b>[3/3 ACK]</b> 客戶端確認回應...";
+                    animatePacket(client.position, server.position, () => {
+                        document.getElementById('tcp-status').innerText = "ESTABLISHED (已建立)";
+                        document.getElementById('tcp-status').style.color = "#00ff88";
+                        info.innerHTML = "✅ <b>TCP 三次握手成功！</b>";
+                        packet.visible = false; isAnimating = false;
+                    });
+                });
+            });
+        });
+
+        function animate() { 
+            requestAnimationFrame(animate); 
+            controls.update(); 
+            updateLabels(); 
+            renderer.render(scene, camera); 
+        }
+        animate();
+    </script>
+</body>
+</html>

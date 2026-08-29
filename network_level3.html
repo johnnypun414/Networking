@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3D Network Simulator - Level 3 (DDoS & Load Balancing)</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #0b132b; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; user-select: none; }
+        #canvas-container { width: 100vw; height: 100vh; }
+        .threeui-hud { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 20px; box-sizing: border-box; }
+        .ui-panel { background: rgba(15, 30, 60, 0.92); border: 2px solid #ff0055; box-shadow: 0 0 20px rgba(255, 0, 85, 0.4); backdrop-filter: blur(10px); border-radius: 8px; padding: 15px 20px; color: #ffffff; pointer-events: auto; }
+        .header-panel h1 { margin: 0 0 5px 0; font-size: 18px; color: #ff0055; text-transform: uppercase; }
+        .header-panel p { margin: 0; font-size: 13px; color: #d0e8ff; }
+        
+        .control-panel { position: absolute; right: 20px; top: 20px; width: 340px; }
+        .legend-panel { position: absolute; left: 20px; bottom: 20px; width: 380px; }
+
+        .btn { background: linear-gradient(45deg, #0066ff, #00f0ff); border: none; color: white; padding: 10px; margin: 5px 0; width: 100%; border-radius: 4px; font-weight: bold; font-size: 13px; cursor: pointer; box-shadow: 0 0 10px rgba(0, 240, 255, 0.4); }
+        .btn-ddos { background: linear-gradient(45deg, #ff0055, #ffaa00); }
+        .btn-extra { background: linear-gradient(45deg, #a000ff, #ff0055); }
+        .btn:hover { box-shadow: 0 0 20px rgba(255, 0, 85, 0.9); transform: translateY(-1px); }
+        
+        .level-select { width: 100%; padding: 8px; margin-bottom: 10px; background: #1c2d5a; color: #ffaa00; border: 1px solid #ffaa00; border-radius: 4px; font-weight: bold; }
+        
+        .node-label { position: absolute; color: #ffffff; font-weight: bold; font-size: 12px; padding: 4px 8px; background: rgba(0, 15, 35, 0.85); border-radius: 4px; border: 1px solid #00f0ff; pointer-events: none; white-space: nowrap; transform: translate(-50%, -100%); box-shadow: 0 0 10px rgba(0,240,255,0.4); }
+
+        /* Extra Chapter Modal */
+        .modal-overlay { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(5, 10, 25, 0.88); backdrop-filter: blur(8px); display: none; justify-content: center; align-items: center; z-index: 100; pointer-events: auto; }
+        .modal-content { background: #0f1e3c; border: 2px solid #ff0055; box-shadow: 0 0 30px rgba(255, 0, 85, 0.5); border-radius: 12px; width: 85%; max-width: 800px; max-height: 85vh; overflow-y: auto; padding: 25px; color: #ffffff; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ff0055; padding-bottom: 10px; }
+        .modal-header h2 { margin: 0; color: #ff0055; font-size: 20px; }
+        .close-btn { background: none; border: none; color: #ff0055; font-size: 24px; font-weight: bold; cursor: pointer; }
+
+        @media (max-width: 768px) {
+            .threeui-hud { padding: 8px !important; }
+            .ui-panel { width: 100% !important; padding: 8px 12px !important; }
+            .control-panel { position: absolute !important; top: 8px !important; right: 8px !important; left: 8px !important; width: auto !important; }
+            .legend-panel { position: absolute !important; bottom: 8px !important; left: 8px !important; right: 8px !important; width: auto !important; }
+            .btn { padding: 6px 8px !important; font-size: 11px !important; }
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+    <div id="canvas-container"></div>
+
+    <div id="label-botnet" class="node-label" style="border-color: #ff0055;">👾 殭屍網絡 (Botnet / Attackers)</div>
+    <div id="label-lb" class="node-label" style="border-color: #00f0ff;">⚖️ 負載平衡器 (Load Balancer)</div>
+    <div id="label-s1" class="node-label" style="border-color: #00ff88;">🖥️ Server A</div>
+    <div id="label-s2" class="node-label" style="border-color: #00ff88;">🖥️ Server B</div>
+
+    <div class="threeui-hud">
+        <div class="ui-panel header-panel" style="width: 320px;">
+            <h1>🔴 Level 3: DDoS 攻擊與負載平衡</h1>
+            <p>觀察巨量流量如何癱瘓伺服器與 Load Balancer 防禦機制</p>
+        </div>
+
+        <div class="ui-panel legend-panel">
+            <h4 style="margin: 0 0 8px 0; color: #ffaa00;">💡 什麼是負載平衡 (Load Balancing)？</h4>
+            <p style="font-size: 11px; margin: 0; color: #d0e8ff;">如同機場的流量指揮官，將大量訪問請求均勻分發至後端多台伺服器，避免單一伺服器過載崩潰。</p>
+        </div>
+
+        <div class="ui-panel control-panel">
+            <label style="font-size: 12px; color: #a0c0d0;">選擇難度等級 (Switch Level):</label>
+            <select class="level-select" onchange="location = this.value;">
+                <option value="network_level1.html">Level 1: 基礎傳輸 (Basic)</option>
+                <option value="network_level2.html">Level 2: TCP 握手與防火牆 (Medium)</option>
+                <option value="network_level3.html" selected>Level 3: DDoS 與負載平衡 (Hard)</option>
+                <option value="network_level4.html">Level 4: VLANs & 廣播風暴 (CCNA)</option>
+                <option value="network_level5.html">Level 5: 路由器與 IP 網段 (CCNA)</option>
+                <option value="network_level6.html">Level 6: 企業級 SD-WAN (CCNP)</option>
+            </select>
+            
+            <button class="btn btn-extra" onclick="toggleModal(true)">⚠️ 了解 DDoS 成因與防禦 (Extra Chapter)</button>
+            <button class="btn btn-ddos" id="btn-attack">🔥 發動 DDoS 攻擊模擬</button>
+            
+            <div style="font-size: 12px; margin-top: 10px;">
+                <b>伺服器負載狀態：</b>
+                <div style="color: #00ff88; margin-top: 4px;" id="server-load">Normal (正常運行 15%)</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Extra Chapter Modal: DDoS 原理詳細解說 -->
+    <div id="ddos-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📖 Extra Chapter: DDoS 攻擊是如何製作與發動的？</h2>
+                <button class="close-btn" onclick="toggleModal(false)">✕</button>
+            </div>
+
+            <div style="font-size: 13px; line-height: 1.7; color: #e0f0ff; margin-top: 15px;">
+                <h3 style="color: #ffaa00; margin-bottom: 5px;">1. 攻擊原理：黑客如何建立「殭屍軍團」？</h3>
+                <p style="margin-top: 0;">黑客通常不會用自己的電腦直接攻擊，而是透過以下步驟製作 <b>Botnet (殭屍網絡)</b>：</p>
+                <ul style="padding-left: 20px; color: #a0c0d0;">
+                    <li><b>植入木馬：</b> 利用網路漏洞或惡意郵件，感染數萬台缺乏防護的電腦、路由器或 IP 攝影機。</li>
+                    <li><b>C&C 控盤：</b> 將受感染設備連結至黑客的 C&C (Command & Control) 命令伺服器。</li>
+                    <li><b>萬箭齊發：</b> 黑客只需按一個按鈕，數萬台機器就會同時向目標發送海量請求。</li>
+                </ul>
+
+                <h3 style="color: #ffaa00; margin-bottom: 5px;">2. 三大常見 DDoS 攻擊手法：</h3>
+                <table style="width: 100%; border-collapse: collapse; font-size: 12px; margin: 10px 0;">
+                    <tr style="background: #182e5c; color: #00f0ff;">
+                        <th style="border: 1px solid #224477; padding: 6px;">攻擊類型</th>
+                        <th style="border: 1px solid #224477; padding: 6px;">生活比喻</th>
+                        <th style="border: 1px solid #224477; padding: 6px;">技術目標</th>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #224477; padding: 6px;"><b>容量攻擊 (Volumetric)</b></td>
+                        <td style="border: 1px solid #224477; padding: 6px;">用幾百輛車堵死餐廳門口道路</td>
+                        <td style="border: 1px solid #224477; padding: 6px;">塞爆網路總頻寬 (UDP Flood)</td>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #224477; padding: 6px;"><b>協議攻擊 (Protocol)</b></td>
+                        <td style="border: 1px solid #224477; padding: 6px;">打電話訂位但講一半掛斷佔線</td>
+                        <td style="border: 1px solid #224477; padding: 6px;">耗盡伺服器連線數 (SYN Flood)</td>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #224477; padding: 6px;"><b>應用層攻擊 (Layer 7)</b></td>
+                        <td style="border: 1px solid #224477; padding: 6px;">僱幾千個人同時進餐廳問複雜問題</td>
+                        <td style="border: 1px solid #224477; padding: 6px;">耗盡 CPU/記憶體 (HTTP Request)</td>
+                    </tr>
+                </table>
+
+                <h3 style="color: #ffaa00; margin-bottom: 5px;">3. 企業如何防禦 DDoS？</h3>
+                <p style="margin-top: 0;">防禦 DDoS 不能只靠單台伺服器，通常需要：</p>
+                <ul style="padding-left: 20px; color: #a0c0d0;">
+                    <li><b>Load Balancer (負載平衡器)：</b> 將流量分散給多台伺服器消化。</li>
+                    <li><b>Cloud DDoS Cleaning (如 Cloudflare / AWS Shield)：</b> 透過全球 CDN 節點將惡意流量吸收與洗滌。</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleModal(show) {
+            document.getElementById('ddos-modal').style.display = show ? 'flex' : 'none';
+        }
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 20, 32);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+        scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        dirLight.position.set(10, 30, 20);
+        scene.add(dirLight);
+
+        const grid = new THREE.GridHelper(60, 60, 0xff0055, 0x224488);
+        grid.position.y = -2; scene.add(grid);
+
+        function createNode(x, z, color, size = 2.5) {
+            const group = new THREE.Group(); group.position.set(x, 0, z);
+            const mesh = new THREE.Mesh(
+                new THREE.BoxGeometry(size, size, size), 
+                new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.3 })
+            );
+            group.add(mesh); scene.add(group);
+            return { group, position: new THREE.Vector3(x, 0, z) };
+        }
+
+        const botnet = createNode(-14, 0, 0xff0055, 3.2);
+        const lb = createNode(0, 0, 0x00f0ff, 2.8);
+        const serverA = createNode(14, -6, 0x00ff88, 2.2);
+        const serverB = createNode(14, 6, 0x00ff88, 2.2);
+
+        // 繪製連線網線
+        function drawLine(p1, p2, color = 0x224477) {
+            const geo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+            const mat = new THREE.LineBasicMaterial({ color });
+            scene.add(new THREE.Line(geo, mat));
+        }
+        drawLine(botnet.position, lb.position, 0xff0055);
+        drawLine(lb.position, serverA.position, 0x00f0ff);
+        drawLine(lb.position, serverB.position, 0x00f0ff);
+
+        // 標籤定位
+        function updateLabels() {
+            function project(pos, elemId, offsetY = 2.2) {
+                const tempV = pos.clone(); tempV.y += offsetY; tempV.project(camera);
+                const x = (tempV.x * .5 + .5) * window.innerWidth;
+                const y = (tempV.y * -.5 + .5) * window.innerHeight;
+                const elem = document.getElementById(elemId);
+                if(elem) { elem.style.left = `${x}px`; elem.style.top = `${y}px`; }
+            }
+            project(botnet.position, 'label-botnet', 2.5);
+            project(lb.position, 'label-lb', 2.2);
+            project(serverA.position, 'label-s1', 2.0);
+            project(serverB.position, 'label-s2', 2.0);
+        }
+
+        // --- 🚀 DDoS 封包粒子動畫引擎 ---
+        const packets = [];
+        const packetGeo = new THREE.SphereGeometry(0.35, 8, 8);
+        const attackMat = new THREE.MeshBasicMaterial({ color: 0xff0055 });
+        const normalMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
+
+        let isAttacking = false;
+        let lastSpawnTime = 0;
+
+        function spawnPacket() {
+            const isStage1 = Math.random() > 0.3; // 階段一：從 Botnet 到 LB
+            const packet = new THREE.Mesh(packetGeo, isAttacking ? attackMat : normalMat);
+            
+            if(isStage1) {
+                packet.position.copy(botnet.position);
+                packet.userData = {
+                    start: botnet.position.clone(),
+                    target: lb.position.clone(),
+                    progress: 0,
+                    speed: isAttacking ? 0.03 + Math.random() * 0.02 : 0.015,
+                    stage: 1
+                };
+            } else {
+                const targetServer = Math.random() > 0.5 ? serverA.position : serverB.position;
+                packet.position.copy(lb.position);
+                packet.userData = {
+                    start: lb.position.clone(),
+                    target: targetServer.clone(),
+                    progress: 0,
+                    speed: isAttacking ? 0.03 + Math.random() * 0.02 : 0.015,
+                    stage: 2
+                };
+            }
+            scene.add(packet);
+            packets.push(packet);
+        }
+
+        function updatePackets() {
+            for (let i = packets.length - 1; i >= 0; i--) {
+                const p = packets[i];
+                p.userData.progress += p.userData.speed;
+                p.position.lerpVectors(p.userData.start, p.userData.target, p.userData.progress);
+
+                if (p.userData.progress >= 1) {
+                    scene.remove(p);
+                    packets.splice(i, 1);
+                }
+            }
+        }
+
+        document.getElementById('btn-attack').addEventListener('click', () => {
+            isAttacking = !isAttacking;
+            const btn = document.getElementById('btn-attack');
+            const load = document.getElementById('server-load');
+
+            if(isAttacking) {
+                btn.innerText = "🛑 停止攻擊模擬";
+                load.innerText = "🚨 HIGH OVERLOAD (負載率 98% - 伺服器瀕臨崩潰)";
+                load.style.color = "#ff0055";
+            } else {
+                btn.innerText = "🔥 發動 DDoS 攻擊模擬";
+                load.innerText = "Normal (正常運行 15%)";
+                load.style.color = "#00ff88";
+            }
+        });
+
+        function animate(now) {
+            requestAnimationFrame(animate);
+            controls.update();
+            updateLabels();
+
+            // 生成攻擊封包：一般模式頻率低，攻擊模式大量生成
+            const spawnInterval = isAttacking ? 40 : 400; // 40毫秒高密度連續生成
+            if (now - lastSpawnTime > spawnInterval) {
+                spawnPacket();
+                if(isAttacking) spawnPacket(); // 攻擊時雙倍產生
+                lastSpawnTime = now;
+            }
+
+            updatePackets();
+            renderer.render(scene, camera);
+        }
+        animate(0);
+    </script>
+</body>
+</html>

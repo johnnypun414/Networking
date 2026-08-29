@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3D Network Simulator - Level 1 (Basic Illuminated)</title>
+    <style>
+        
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background-color: #0b132b; /* 調亮背景色，從極深藍調為高對比深藍 */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            user-select: none; 
+        }
+        #canvas-container { width: 100vw; height: 100vh; }
+        .threeui-hud { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            pointer-events: none; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: space-between; 
+            padding: 20px; 
+            box-sizing: border-box; 
+        }
+        .ui-panel { 
+            background: rgba(15, 30, 60, 0.9); /* 提高面板亮度與可讀性 */
+            border: 2px solid #00f0ff; 
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.5); 
+            backdrop-filter: blur(10px); 
+            border-radius: 8px; 
+            padding: 15px 20px; 
+            color: #ffffff; 
+            pointer-events: auto; 
+        }
+        .header-panel h1 { margin: 0 0 5px 0; font-size: 18px; color: #00f0ff; text-transform: uppercase; }
+        .header-panel p { margin: 0; font-size: 13px; color: #d0e8ff; }
+        
+        .control-panel { position: absolute; right: 20px; top: 20px; width: 320px; }
+        .legend-panel { position: absolute; left: 20px; bottom: 20px; width: 340px; }
+
+        .btn { 
+            background: linear-gradient(45deg, #0066ff, #00f0ff); 
+            border: none; 
+            color: white; 
+            padding: 12px; 
+            margin: 8px 0; 
+            width: 100%; 
+            border-radius: 4px; 
+            font-weight: bold; 
+            font-size: 14px;
+            cursor: pointer; 
+            box-shadow: 0 0 10px rgba(0, 240, 255, 0.4);
+        }
+        .btn:hover { box-shadow: 0 0 20px rgba(0, 240, 255, 0.9); transform: translateY(-1px); }
+        .level-select { 
+            width: 100%; 
+            padding: 8px; 
+            margin-bottom: 10px; 
+            background: #1c2d5a; 
+            color: #00f0ff; 
+            border: 1px solid #00f0ff; 
+            border-radius: 4px; 
+            font-weight: bold; 
+        }
+        .info-card { 
+            font-size: 13px; 
+            line-height: 1.6; 
+            margin-top: 10px; 
+            border-top: 1px solid rgba(0, 240, 255, 0.3); 
+            padding-top: 8px; 
+        }
+        
+        /* 3D 文字標籤樣式 */
+        .node-label {
+            position: absolute;
+            color: #ffffff;
+            font-weight: bold;
+            font-size: 13px;
+            padding: 4px 8px;
+            background: rgba(0, 15, 35, 0.85);
+            border-radius: 4px;
+            border: 1px solid #00f0ff;
+            pointer-events: none;
+            white-space: nowrap;
+            transform: translate(-50%, -100%);
+            box-shadow: 0 0 10px rgba(0,240,255,0.4);
+        }
+    /* 📱 手機螢幕極致優化 (螢幕寬度小於 768px 時自動切換) */
+        @media (max-width: 768px) {
+            /* 1. 縮減全域 Padding 與邊距 */
+            .threeui-hud {
+                padding: 8px !important;
+            }
+
+            /* 2. 讓所有 UI 面板自動適應寬度，並大幅縮小內距 */
+            .ui-panel {
+                width: 100% !important;
+                max-width: 100% !important;
+                padding: 8px 12px !important;
+                box-sizing: border-box !important;
+                border-width: 1px !important;
+            }
+
+            /* 3. 重設定位：將控制面板移至頂部，圖例移至底部 */
+            .header-panel {
+                position: relative !important;
+                width: 100% !important;
+                margin-bottom: 6px !important;
+            }
+            
+            .control-panel {
+                position: absolute !important;
+                top: 8px !important;
+                right: 8px !important;
+                left: 8px !important;
+                width: auto !important;
+            }
+
+            .legend-panel {
+                position: absolute !important;
+                bottom: 8px !important;
+                left: 8px !important;
+                right: 8px !important;
+                width: auto !important;
+                max-height: 120px !important; /* 限制高度，避免擋住 3D */
+                overflow-y: auto !important;   /* 文字過長時允許內部滑動 */
+            }
+
+            /* 4. 等比例縮小字體與按鈕，節省空間 */
+            .header-panel h1 { font-size: 14px !important; margin-bottom: 2px !important; }
+            .header-panel p { font-size: 11px !important; }
+            
+            .btn {
+                padding: 6px 8px !important;
+                font-size: 11px !important;
+                margin: 3px 0 !important;
+            }
+
+            .level-select {
+                padding: 4px !important;
+                font-size: 11px !important;
+                margin-bottom: 4px !important;
+            }
+
+            .info-card {
+                font-size: 10px !important;
+                margin-top: 5px !important;
+                padding-top: 5px !important;
+            }
+
+            /* 5. 縮小 3D 浮動文字標籤 (Node Labels) */
+            .node-label {
+                font-size: 10px !important;
+                padding: 2px 5px !important;
+            }
+
+            /* 6. 彈出對話視窗 (Modal) 自動縮小 */
+            .modal-content {
+                width: 90% !important;
+                padding: 12px !important;
+                max-height: 80vh !important;
+            }
+
+            .model-table {
+                font-size: 10px !important;
+            }
+            
+            .model-table th, .model-table td {
+                padding: 4px 6px !important;
+            }
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+    <div id="canvas-container"></div>
+
+    <!-- HTML 3D Floating Labels -->
+    <div id="label-client" class="node-label" style="border-color: #00f0ff;">💻 客戶端 (Client)</div>
+    <div id="label-router" class="node-label" style="border-color: #ffaa00;">🌐 路由器 (Router)</div>
+    <div id="label-server" class="node-label" style="border-color: #00ff88;">🖥️ 伺服器 (Server)</div>
+
+    <div class="threeui-hud">
+        <!-- 標題面板 -->
+        <div class="ui-panel header-panel" style="width: 320px;">
+            <h1>🟢 Level 1: 基礎數據包傳輸</h1>
+            <p>理解網頁請求如何從你的電腦送到目標伺服器</p>
+        </div>
+
+        <!-- 左下角圖例說明面板 -->
+        <div class="ui-panel legend-panel">
+            <h4 style="margin: 0 0 8px 0; color: #00f0ff;">🔍 三個 3D 方塊代表什麼？</h4>
+            <div style="font-size: 12px; line-height: 1.5; color: #e0f0ff;">
+                <p style="margin: 4px 0;"><strong style="color: #00f0ff;">1. Client (客戶端/你的電腦)：</strong> 發送請求的設備 (例如瀏覽器開啟網頁)。</p>
+                <p style="margin: 4px 0;"><strong style="color: #ffaa00;">2. Router (路由器/中繼站)：</strong> 負責將數據包指引方向、轉發到正確目的地。</p>
+                <p style="margin: 4px 0;"><strong style="color: #00ff88;">3. Server (伺服器/網站主機)：</strong> 存放網頁資料的地方，收到請求後回應資料。</p>
+            </div>
+        </div>
+
+        <!-- 右上角控制台 -->
+        <div class="ui-panel control-panel">
+            <label style="font-size: 12px; color: #a0c0d0;">選擇難度等級 (Switch Level):</label>
+            <select class="level-select" onchange="location = this.value;">
+                <option value="network_level1.html" selected>Level 1: 基礎傳輸 (Basic)</option>
+                <option value="network_level2.html">Level 2: TCP 握手與防火牆 (Medium)</option>
+                <option value="network_level3.html">Level 3: DDoS 與負載平衡 (Hard)</option>
+                <option value="network_level4.html">Level 4: VLANs & 廣播風暴 (CCNA)</option>
+                <option value="network_level5.html">Level 5: 路由器與 IP 網段 (CCNA)</option>
+                <option value="network_level6.html">Level 6: 企業級 SD-WAN (CCNP)</option>
+            </select>
+            
+            <button class="btn" id="btn-send">🚀 發送數據包 (Send Packet)</button>
+            
+            <div class="info-card">
+                <div><strong>傳輸狀態：</strong> <span id="status-text" style="color:#00ff88; font-weight: bold;">就緒 (Ready)</span></div>
+                <div style="margin-top: 6px; font-weight: bold; color: #ffaa00;">數據包標頭資訊解析：</div>
+                <div id="packet-info" style="color: #00f0ff; font-family: monospace; background: rgba(0,0,0,0.4); padding: 8px; border-radius: 4px; margin-top: 4px;">
+                    點擊上方按鈕，體驗數據發送！
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. 場景初始化 (高亮度設定) ---
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x0b132b, 0.015); // 減稀霧氣，提升透亮度
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 14, 28);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        // --- 2. 大幅增強燈光系統 (解決太暗問題) ---
+        // 強化的全局環境光
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1.2); 
+        scene.add(ambientLight);
+
+        // 主方向光 (陽光效果)
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        dirLight.position.set(10, 30, 20);
+        scene.add(dirLight);
+
+        // 補光 (減少陰影黑角)
+        const fillLight = new THREE.DirectionalLight(0x00f0ff, 0.8);
+        fillLight.position.set(-10, 10, -10);
+        scene.add(fillLight);
+
+        // 亮藍色地面高亮網格
+        const grid = new THREE.GridHelper(60, 60, 0x00f0ff, 0x224488);
+        grid.position.y = -2;
+        scene.add(grid);
+
+        // --- 3. 建立 3D 實體節點 ---
+        function createNode(x, z, color) {
+            const group = new THREE.Group();
+            group.position.set(x, 0, z);
+
+            // 主方塊 (提升反射率與亮度)
+            const mesh = new THREE.Mesh(
+                new THREE.BoxGeometry(2.5, 2.5, 2.5), 
+                new THREE.MeshStandardMaterial({ 
+                    color: color, 
+                    roughness: 0.1, 
+                    metalness: 0.3,
+                    emissive: color,
+                    emissiveIntensity: 0.3 // 自發光提高辨識度
+                })
+            );
+            group.add(mesh);
+
+            // 底層光環
+            const ring = new THREE.Mesh(
+                new THREE.RingGeometry(2.0, 2.3, 32),
+                new THREE.MeshBasicMaterial({ color: color, side: THREE.DoubleSide })
+            );
+            ring.rotation.x = Math.PI / 2;
+            ring.position.y = -1.2;
+            group.add(ring);
+
+            scene.add(group);
+            return { group, position: new THREE.Vector3(x, 0, z) };
+        }
+
+        const clientNode = createNode(-12, 0, 0x00f0ff);  // 亮青色 Client
+        const routerNode = createNode(0, 0, 0xffaa00);  // 亮黃色 Router
+        const serverNode = createNode(12, 0, 0x00ff88);  // 亮綠色 Server
+
+        // --- 4. 建立連線管道 ---
+        function createPipeline(p1, p2) {
+            const points = [p1, p2];
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const material = new THREE.LineBasicMaterial({ color: 0x00f0ff, linewidth: 2 });
+            const line = new THREE.Line(geometry, material);
+            scene.add(line);
+        }
+        createPipeline(clientNode.position, routerNode.position);
+        createPipeline(routerNode.position, serverNode.position);
+
+        // --- 5. 數據包 (Packet) 實體 ---
+        const packet = new THREE.Mesh(
+            new THREE.SphereGeometry(0.6, 24, 24), 
+            new THREE.MeshBasicMaterial({ color: 0xffff00 })
+        );
+        const packetLight = new THREE.PointLight(0xffff00, 3, 8);
+        packet.add(packetLight);
+        packet.visible = false; 
+        scene.add(packet);
+
+        // --- 6. 3D 標籤位置同步 ---
+        function updateLabels() {
+            function project(pos, elementId) {
+                const tempV = pos.clone();
+                tempV.y += 2.2; // 顯示在方塊上方
+                tempV.project(camera);
+                const x = (tempV.x *  .5 + .5) * window.innerWidth;
+                const y = (tempV.y * -.5 + .5) * window.innerHeight;
+                const elem = document.getElementById(elementId);
+                elem.style.left = `${x}px`;
+                elem.style.top = `${y}px`;
+            }
+            project(clientNode.position, 'label-client');
+            project(routerNode.position, 'label-router');
+            project(serverNode.position, 'label-server');
+        }
+
+        // --- 7. 動畫與互動流程 ---
+        let isAnimating = false;
+
+        function animatePacket(from, to, duration, callback) {
+            let start = null; 
+            packet.position.copy(from); 
+            packet.visible = true;
+            
+            function step(t) {
+                if (!start) start = t;
+                let progress = (t - start) / duration;
+                if (progress < 1) { 
+                    packet.position.lerpVectors(from, to, progress); 
+                    requestAnimationFrame(step); 
+                } else { 
+                    packet.position.copy(to); 
+                    if (callback) callback(); 
+                }
+            }
+            requestAnimationFrame(step);
+        }
+
+        document.getElementById('btn-send').addEventListener('click', () => {
+            if (isAnimating) return; 
+            isAnimating = true;
+
+            const packetInfo = document.getElementById('packet-info');
+            const statusText = document.getElementById('status-text');
+
+            // 步驟 1: Client -> Router -> Server
+            statusText.innerText = "發送 HTTP 請求中...";
+            statusText.style.color = "#00f0ff";
+            
+            packetInfo.innerHTML = 
+                `<b>[發送端] SRC:</b> 192.168.1.100 (Client)<br>` +
+                `<b>[目的端] DST:</b> 142.250.1.1 (Server)<br>` +
+                `<b>[內容]:</b> GET /index.html (請求網頁)`;
+
+            animatePacket(clientNode.position, routerNode.position, 1000, () => {
+                animatePacket(routerNode.position, serverNode.position, 1000, () => {
+                    
+                    // 步驟 2: Server 回應 -> Router -> Client
+                    statusText.innerText = "伺服器處理完畢，傳回資料...";
+                    statusText.style.color = "#00ff88";
+
+                    packetInfo.innerHTML = 
+                        `<b>[發送端] SRC:</b> 142.250.1.1 (Server)<br>` +
+                        `<b>[目的端] DST:</b> 192.168.1.100 (Client)<br>` +
+                        `<b>[內容]:</b> 200 OK (網頁內容 HTML)`;
+
+                    animatePacket(serverNode.position, routerNode.position, 1000, () => {
+                        animatePacket(routerNode.position, clientNode.position, 1000, () => {
+                            statusText.innerText = "完成 (Completed)";
+                            packet.visible = false; 
+                            isAnimating = false;
+                        });
+                    });
+                });
+            });
+        });
+
+        // --- 8. 渲染循環與視窗縮放 ---
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        function animate() { 
+            requestAnimationFrame(animate); 
+            controls.update(); 
+            updateLabels();
+
+            // 方塊微幅上下漂浮
+            const time = Date.now() * 0.002;
+            clientNode.group.position.y = Math.sin(time) * 0.15;
+            routerNode.group.position.y = Math.sin(time + 1) * 0.15;
+            serverNode.group.position.y = Math.sin(time + 2) * 0.15;
+
+            renderer.render(scene, camera); 
+        }
+        
+        animate();
+    </script>
+</body>
+</html>

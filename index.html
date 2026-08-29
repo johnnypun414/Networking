@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Network Simulator - 主選單</title>
+    <style>
+        body {
+            background-color: #0b132b;
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .card {
+            background: rgba(15, 30, 60, 0.9);
+            border: 2px solid #00f0ff;
+            box-shadow: 0 0 25px rgba(0, 240, 255, 0.4);
+            border-radius: 12px;
+            padding: 30px;
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+        h1 { color: #00f0ff; margin-bottom: 20px; font-size: 22px; }
+        .btn {
+            display: block;
+            background: linear-gradient(45deg, #0066ff, #00f0ff);
+            color: white;
+            text-decoration: none;
+            padding: 12px;
+            margin: 12px 0;
+            border-radius: 6px;
+            font-weight: bold;
+            transition: 0.2s;
+        }
+        .btn-l2 { background: linear-gradient(45deg, #0066ff, #ffaa00); }
+        .btn-l3 { background: linear-gradient(45deg, #ff0055, #ffaa00); }
+        .btn:hover { transform: translateY(-2px); filter: brightness(1.2); }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🌐 3D 網路模擬器 (Network Simulator)</h1>
+        <p style="color: #a0c0d0; font-size: 14px;">請選擇你想體驗的關卡：</p>
+        <a href="network_level1.html" class="btn">🟢 Level 1: 基礎傳輸 (Basic)</a>
+        <a href="network_level2.html" class="btn btn-l2">🟡 Level 2: TCP 握手與防火牆 (Medium)</a>
+        <a href="network_level3.html" class="btn btn-l3">🔴 Level 3: DDoS 與負載平衡 (Hard)</a>
+        <a href="network_level4.html" class="btn btn-l3">🔴 Level 4: VLans & 廣播風暴 (Hard)</a>
+        <a href="network_level5.html" class="btn btn-l3">🔴 Level 5: 路由器與IP網段 (Hard)</a>
+        <a href="network_level6.html" class="btn btn-l3">🔴 Level 6: 企業級 SD-WAN (Hard)</a>
+    </div>
+</body>
+</html>

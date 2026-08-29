@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3D Network Simulator - Level 6 (SD-WAN & Automation)</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #050a15; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; user-select: none; }
+        #canvas-container { width: 100vw; height: 100vh; }
+        .threeui-hud { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 20px; box-sizing: border-box; }
+        .ui-panel { background: rgba(8, 15, 30, 0.95); border: 2px solid #a000ff; box-shadow: 0 0 20px rgba(160, 0, 255, 0.4); backdrop-filter: blur(10px); border-radius: 8px; padding: 15px 20px; color: #ffffff; pointer-events: auto; }
+        .header-panel h1 { margin: 0 0 5px 0; font-size: 18px; color: #a000ff; text-transform: uppercase; }
+        .header-panel p { margin: 0; font-size: 13px; color: #d0e8ff; }
+        
+        .control-panel { position: absolute; right: 20px; top: 20px; width: 360px; }
+        .legend-panel { position: absolute; left: 20px; bottom: 20px; width: 380px; }
+
+        .btn { background: linear-gradient(45deg, #7b2cbf, #a000ff); border: none; color: white; padding: 10px; margin: 5px 0; width: 100%; border-radius: 4px; font-weight: bold; font-size: 13px; cursor: pointer; box-shadow: 0 0 10px rgba(160, 0, 255, 0.4); }
+        .btn-api { background: linear-gradient(45deg, #00f0ff, #0077b6); color: #000; font-weight: 800; }
+        .btn-extra { background: linear-gradient(45deg, #ff0055, #a000ff); }
+        .btn:hover { box-shadow: 0 0 20px rgba(160, 0, 255, 0.9); transform: translateY(-1px); }
+        
+        .level-select { width: 100%; padding: 8px; margin-bottom: 10px; background: #1c2d5a; color: #ffaa00; border: 1px solid #ffaa00; border-radius: 4px; font-weight: bold; }
+        .node-label { position: absolute; color: #ffffff; font-weight: bold; font-size: 12px; padding: 4px 8px; background: rgba(15, 5, 30, 0.85); border-radius: 4px; border: 1px solid #a000ff; pointer-events: none; white-space: nowrap; transform: translate(-50%, -100%); box-shadow: 0 0 10px rgba(160,0,255,0.4); }
+
+        .modal-overlay { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(5, 10, 25, 0.88); backdrop-filter: blur(8px); display: none; justify-content: center; align-items: center; z-index: 100; pointer-events: auto; }
+        .modal-content { background: #0f1e3c; border: 2px solid #a000ff; box-shadow: 0 0 30px rgba(160, 0, 255, 0.5); border-radius: 12px; width: 85%; max-width: 800px; max-height: 85vh; overflow-y: auto; padding: 25px; color: #ffffff; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #a000ff; padding-bottom: 10px; }
+        .modal-header h2 { margin: 0; color: #a000ff; font-size: 20px; }
+        .close-btn { background: none; border: none; color: #ff0055; font-size: 24px; font-weight: bold; cursor: pointer; }
+
+        @media (max-width: 768px) {
+            .threeui-hud { padding: 8px !important; }
+            .ui-panel { width: 100% !important; padding: 8px 12px !important; }
+            .control-panel { position: absolute !important; top: 8px !important; right: 8px !important; left: 8px !important; width: auto !important; }
+            .legend-panel { position: absolute !important; bottom: 8px !important; left: 8px !important; right: 8px !important; width: auto !important; }
+            .btn { padding: 6px 8px !important; font-size: 11px !important; }
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+    <div id="canvas-container"></div>
+
+    <div id="label-controller" class="node-label" style="border-color: #00f0ff;">☁️ SD-WAN Controller (vManage)</div>
+    <div id="label-site1" class="node-label" style="border-color: #a000ff;">🏢 Branch A (vEdge 1)</div>
+    <div id="label-site2" class="node-label" style="border-color: #a000ff;">🏢 Branch B (vEdge 2)</div>
+    <div id="label-site3" class="node-label" style="border-color: #a000ff;">🏢 Branch C (vEdge 3)</div>
+
+    <div class="threeui-hud">
+        <div class="ui-panel header-panel" style="width: 350px;">
+            <h1>🔴 Level 6: 企業級 SD-WAN 與自動化 (CCNP)</h1>
+            <p>控制面與數據面分離、Python REST API 一鍵部署</p>
+        </div>
+
+        <div class="ui-panel legend-panel">
+            <h4 style="margin: 0 0 8px 0; color: #ffaa00;">💡 傳統網絡痛點與 SDN 革命</h4>
+            <p style="font-size: 11px; margin: 0; color: #d0e8ff;">當企業有幾百家分店，逐台敲命令（CLI）設定極易出錯。SD-WAN 將「控制面（大腦）」集中於雲端 Controller，透過 Python / API 即可一鍵下發策略給全球所有分店！</p>
+        </div>
+
+        <div class="ui-panel control-panel">
+            <label style="font-size: 12px; color: #a0c0d0;">選擇難度等級 (Switch Level):</label>
+            <select class="level-select" onchange="location = this.value;">
+                <option value="network_level1.html">Level 1: 基礎傳輸 (Basic)</option>
+                <option value="network_level2.html">Level 2: TCP 握手與防火牆 (Medium)</option>
+                <option value="network_level3.html">Level 3: DDoS 與負載平衡 (Hard)</option>
+                <option value="network_level4.html">Level 4: VLANs & 廣播風暴 (CCNA)</option>
+                <option value="network_level5.html">Level 5: 路由器與 IP 網段 (CCNA)</option>
+                <option value="network_level6.html" selected>Level 6: 企業級 SD-WAN (CCNP)</option>
+            </select>
+            
+            <button class="btn btn-extra" onclick="toggleModal(true)">🎓 邁向 CCNP：SDN & SD-WAN 深度解析</button>
+            <button class="btn btn-api" id="btn-deploy">⚡ 執行 Python API 一鍵推播安全策略</button>
+        </div>
+    </div>
+
+    <div id="extra-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📖 資深工程師講堂：Level 6 高階 SD-WAN 與自動化</h2>
+                <button class="close-btn" onclick="toggleModal(false)">✕</button>
+            </div>
+            <div style="font-size: 13px; line-height: 1.7; color: #e0f0ff; margin-top: 15px;">
+                <h3 style="color: #a000ff; margin-bottom: 5px;">1. 痛點爆發：傳統 CLI 設定的終極困境</h3>
+                <p>在 Level 5 中，每台 Router 都有自己的大腦。當企業擴張到 500 間分店時，工程師必須 SSH 登入 500 次敲指令。一旦有人打錯字，分店立即斷線，極難維護。</p>
+
+                <h3 style="color: #a000ff; margin-bottom: 5px;">2. SDN / SD-WAN 核心：控制面與數據面分離</h3>
+                <p>• <b>Control Plane（控制面 - 大腦）：</b> 集中於雲端控制器（如 Cisco vManage / vSmart），統一計算路由與安全原則。<br>
+                • <b>Data Plane（數據面 - 肌肉）：</b> 放在分店的實體路由器（vEdge），只專心進行高速 IPsec 數據轉發。</p>
+
+                <h3 style="color: #a000ff; margin-bottom: 5px;">3. Cisco CCNP 認證考點：Python 與 REST API</h3>
+                <p>現代網絡工程師不再只會敲命令，而是使用 <b>Python + REST API (JSON)</b> 與 Controller 對話。只需在 Controller 變更範本（Template），系統便會自動將加密隧道（Overlay Mesh）推播至全球端點！</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleModal(show) { document.getElementById('extra-modal').style.display = show ? 'flex' : 'none'; }
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 22, 38);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+
+        const grid = new THREE.GridHelper(60, 60, 0xa000ff, 0x221144);
+        grid.position.y = -2; scene.add(grid);
+
+        function createNode(x, z, color, size = 2.5) {
+            const group = new THREE.Group(); group.position.set(x, 0, z);
+            const mesh = new THREE.Mesh(new THREE.OctahedronGeometry(size), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.4 }));
+            group.add(mesh); scene.add(group);
+            return { group, position: new THREE.Vector3(x, 0, z) };
+        }
+
+        const controller = createNode(0, -12, 0x00f0ff, 3.5);
+        const site1 = createNode(-18, 10, 0xa000ff, 2.5);
+        const site2 = createNode(0, 12, 0xa000ff, 2.5);
+        const site3 = createNode(18, 10, 0xa000ff, 2.5);
+
+        function drawControlLines() {
+            function makeDashLine(p1, p2) {
+                const geo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+                const mat = new THREE.LineDashedMaterial({ color: 0x00f0ff, dashSize: 0.8, gapSize: 0.4 });
+                const line = new THREE.Line(geo, mat);
+                line.computeLineDistances();
+                scene.add(line);
+            }
+            makeDashLine(controller.position, site1.position);
+            makeDashLine(controller.position, site2.position);
+            makeDashLine(controller.position, site3.position);
+        }
+        drawControlLines();
+
+        function updateLabels() {
+            function project(pos, elemId) {
+                const tempV = pos.clone(); tempV.y += 2.5; tempV.project(camera);
+                const x = (tempV.x * .5 + .5) * window.innerWidth;
+                const y = (tempV.y * -.5 + .5) * window.innerHeight;
+                const elem = document.getElementById(elemId);
+                if(elem) { elem.style.left = `${x}px`; elem.style.top = `${y}px`; }
+            }
+            project(controller.position, 'label-controller'); 
+            project(site1.position, 'label-site1');
+            project(site2.position, 'label-site2'); 
+            project(site3.position, 'label-site3');
+        }
+
+        const packets = [];
+
+        document.getElementById('btn-deploy').addEventListener('click', () => {
+            // 一鍵推播 API 政策給三個分店
+            spawnPacket(controller.position, site1.position, 0x00f0ff);
+            spawnPacket(controller.position, site2.position, 0x00f0ff);
+            spawnPacket(controller.position, site3.position, 0x00f0ff);
+        });
+
+        function spawnPacket(from, to, color) {
+            const p = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 12), new THREE.MeshBasicMaterial({ color }));
+            p.position.copy(from);
+            p.userData = { start: from.clone(), target: to.clone(), progress: 0, speed: 0.02 };
+            scene.add(p); packets.push(p);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update(); updateLabels();
+
+            controller.group.rotation.y += 0.01;
+            site1.group.rotation.y += 0.015;
+            site2.group.rotation.y += 0.015;
+            site3.group.rotation.y += 0.015;
+
+            for (let i = packets.length - 1; i >= 0; i--) {
+                const p = packets[i];
+                p.userData.progress += p.userData.speed;
+                p.position.lerpVectors(p.userData.start, p.userData.target, p.userData.progress);
+                if (p.userData.progress >= 1) { scene.remove(p); packets.splice(i, 1); }
+            }
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+</html>
